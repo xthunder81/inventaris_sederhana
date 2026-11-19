@@ -1,11 +1,19 @@
 # Miscellaneous
 *.class
 *.lock
+!pubspec.lock
 *.log
 *.pyc
 *.swp
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+*.iml
 .buildlog/
 .history
+data/mongodb/
 
 
 

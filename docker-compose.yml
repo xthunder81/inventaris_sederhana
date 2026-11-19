@@ -1,0 +1,50 @@
+# Layanan MongoDB dan proses setup dijalankan bersama melalui Docker Compose.
+services:
+  mongodb:
+    image: mongo:8.0
+    # Jalankan MongoDB sebagai anggota replica set dan izinkan koneksi dari container lain.
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    # Port host dibatasi ke localhost; aplikasi host mengakses MongoDB di port 27018.
+    ports:
+      - "127.0.0.1:27018:27017"
+    # Simpan data database di volume agar tetap ada setelah container dibuat ulang.
+    volumes:
+      - mongodb_data:/data/db
+    # Pastikan MongoDB merespons ping sebelum container setup mulai bekerja.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "db.adminCommand('ping').ok",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  # Container sekali jalan untuk menyiapkan replica set lalu membuat skema dan data awal.
+  mongodb-setup:
+    image: mongo:8.0
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      # Pasang skrip inisialisasi sebagai read-only agar tidak mengubah file di host.
+      - ./database/mongo/init.js:/scripts/init.js:ro
+      - ./database/mongo/setup-replica-set.js:/scripts/setup-replica-set.js:ro
+    entrypoint: ["/bin/sh", "-c"]
+    # Jalankan setup replica set terlebih dahulu, kemudian inisialisasi database.
+    command: >-
+      mongosh "mongodb://mongodb:27017/admin?directConnection=true" --quiet
+      --file /scripts/setup-replica-set.js &&
+      mongosh "mongodb://mongodb:27017/inventaris_sederhana?directConnection=true"
+      --quiet --file /scripts/init.js
+    restart: "no"
+
+# Volume bernama untuk menyimpan data MongoDB secara persisten.
+volumes:
+  mongodb_data:
